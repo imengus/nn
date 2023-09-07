@@ -1,96 +1,175 @@
 #include "matrix.h"
-#include <map>
+#include <memory>
 
-typedef map<int, Matrix> MatMap;
-using MatMap = map<int, Matrix>;
-using namespace std;
-
-class Network {
-    // private:
-    public:
-        vector<int> layer_dims{5, 4, 10};//{784, 100, 10};
-        vector<Matrix> activations;
-        vector<double> errors;
-        int depth = layer_dims.size();
-        double learn_rate = 0.01;
-        double relu_coeff = 0.5;
-        double w_sdev = 0.25;
-        double w_mean = 0.5;
-        double b_sdev = 0;
-        double b_mean = 0;
-        double mse = 0;
-        Matrix gradient;
-        Matrix Y_hat;
-        MatMap weights;
-        MatMap biases;
-
-        void initialize_parameters() {
-
-            for (int i = 1; i < depth; i++) {
-                Matrix temp_w(layer_dims[i-1], layer_dims[i], w_sdev, w_mean);
-                Matrix temp_b(1, layer_dims[i], b_sdev, b_mean);
-
-                weights[i] = temp_w.relu(relu_coeff);
-                biases[i] = temp_b;
-            }
-        }
-
-        void print_parameters() {
-            for (int i = 1; i < depth; i++ ) {
-                cout << "___weight " << i << endl;
-                weights[i].print();
-                cout << "___bias " << i << endl;
-                biases[i].print();
-                cout << endl;
-            }
-        }
-
-        void calculate_error(Matrix Y_hat, Matrix Y) {
-            mse = (Y_hat - Y).l2_normalized();
-            gradient = (Y_hat - Y) * 2;
-        }
-
-        void forward(Matrix input) {
-            Matrix activation = input;
-            for (int i = 1; i < depth; i++) {
-                activation = weights[i].mult(activation) + biases[i];
-                activations.push_back(activation);
-            }
-            Y_hat = activation;
-        }
-
-        void backward(Matrix Y) {
-            calculate_error(Y_hat, Y);
-            gradient = gradient * Y_hat.relu_derivative(0);
-            for (int i = depth-1; i > 0; i--) {
-                Matrix gradient_weight = gradient.transpose().mult(activations[i-1]);
-                Matrix gradient_bias = gradient * -1;
-
-                weights[i] = weights[i] - gradient_weight * learn_rate;
-                biases[i] = biases[i] - gradient_bias * learn_rate;
-
-                gradient = gradient.mult(weights[i]).transpose();
-
-            }
-        }
+class Layer {
+public:
+    virtual void print_parameters() = 0;
+    virtual Matrix forward(Matrix inp) = 0;
+    virtual Matrix backward(Matrix prev_grad) = 0;
 };
 
+class DenseLayer : public Layer {
+private:
+    double w_sdev, w_mean, b_sdev, b_mean;
+    int layer_num;
+    double learn_rate;
 
+public:
+    Matrix input, output, weight, bias, grad;
+
+    DenseLayer(
+        int num,
+        double inp_height,
+        double out_height,
+        double wsdev = 0.25,
+        double wmean = 0.5,
+        double bsdev = 0,
+        double bmean = 0,
+        double lr = 0.1
+    ) :
+        w_sdev(wsdev),
+        w_mean(wmean),
+        b_sdev(bsdev),
+        b_mean(bmean),
+        learn_rate(lr),
+        layer_num(num) {
+        weight = Matrix(inp_height, out_height, w_sdev, w_mean);
+        bias = Matrix(1, out_height, b_sdev, b_mean);
+    }
+
+    ~DenseLayer() {}
+
+    void print_parameters() override {
+        std::cout << "Dense Layer " << layer_num << std::endl;
+        std::cout << "___weight:" << std::endl;
+        weight.print();
+        std::cout << "___bias:" << std::endl;
+        bias.print();
+        std::cout << std::endl;
+    }
+
+    Matrix forward(Matrix inp) override {
+        input = inp;
+        output = weight.mult(input) - bias;
+        return output;
+    }
+
+    Matrix backward(Matrix prev_grad) override {
+        Matrix grad_weight = prev_grad.mult(input.T());
+        Matrix grad_bias = prev_grad * -1;
+        grad = (prev_grad.T().mult(weight)).T();
+
+        weight = weight - grad_weight * learn_rate;
+        bias = bias - grad_bias * learn_rate;
+
+        return grad;
+    }
+};
+
+class ReLULayer : public Layer {
+private:
+public:
+    int layer_num;
+    double relu_coeff;
+    Matrix input, output, grad;
+
+    ReLULayer(int num, double coeff) : layer_num(num), relu_coeff(coeff) {}
+
+    ~ReLULayer() {}
+
+    void print_parameters() override {
+        std::cout << "ReLU " << layer_num << std::endl;
+        std::cout << "__coeff: " << relu_coeff << std::endl;
+        std::cout << std::endl;
+    }
+
+    Matrix forward(Matrix inp) override {
+        input = inp;
+        output = input.relu(relu_coeff);
+        return output;
+    }
+
+    Matrix backward(Matrix prev_grad) override {
+        grad = output.relu_derivative(relu_coeff) * prev_grad;
+        return grad;
+    }
+};
+
+class MLP {
+private:
+    double mse;
+    Matrix gradient;
+
+public:
+    std::vector<Layer*> layers;
+    Matrix train_X;
+    Matrix train_Y;
+
+    MLP(Matrix inp, Matrix out) : train_X(inp), train_Y(out) {}
+
+    void calculate_error(Matrix Y_hat, Matrix Y) {
+        mse = (Y_hat - Y).l2_normalized();
+        gradient = (Y_hat - Y) * 2;
+    }
+
+    void train() {
+        DenseLayer d0(0, 3, 10);
+        ReLULayer r1(1, 0.2);
+        DenseLayer d2(2, 10, 1);
+        ReLULayer r3(3, 0.2);
+        layers = {&d0, &r1, &d2, &r3};
+
+        Matrix X;
+        Matrix Y;
+        double total_mse = 0;
+        for (int i = 0; i < 1000; i++) {
+            total_mse = 0;
+            for (int j = 0; j < train_X.height; j++) {
+
+                X = {train_X.mat[j]};
+                Y = {train_Y.mat[j]};
+
+                X = X.T();
+                for (auto layer : layers) {
+                    X = (*layer).forward(X);
+                }
+                calculate_error(X, Y.T());
+                total_mse += mse;
+
+                for (int i = layers.size() - 1; i >= 0; i--) {
+                     gradient = (*layers[i]).backward(gradient);
+                }
+            }
+        std::cout << total_mse << std::endl;
+        }
+    }
+};
 
 int main () {
-    Network nn;
-    nn.initialize_parameters();
-    // nn.print_parameters();
-    Matrix input(5, 1);
-    // vector<vector<double>> temp{{1., 2., 3., 4., 5.}};
-    input.mat = {{1, 2, 3, 4, 5}};
-    nn.forward(input.transpose());
-    nn.Y_hat.print();
-    // input.transpose().print();
-    // Matrix first(5, 5);
-    // Matrix res = first * -1;
-    // first.relu_derivative(0.0).print();
-    // cout << endl;
-    // res.relu_derivative(0.0).print();
+
+    Matrix train_X(3, 8);
+    Matrix train_Y(1, 8);
+    train_X.mat = {
+        {0, 0, 0},
+        {0, 0, 1},
+        {0, 1, 0},
+        {0, 1, 1},
+        {1, 0, 0},
+        {1, 0, 1},
+        {1, 1, 0},
+        {1, 1, 1}
+    };
+    train_Y.mat = {
+        {0},
+        {1},
+        {1},
+        {0},
+        {1},
+        {0},
+        {0},
+        {1}
+    };
+    MLP nn(train_X, train_Y);
+    nn.train();
     return 0;
 }
