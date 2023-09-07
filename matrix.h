@@ -1,3 +1,6 @@
+#ifndef _MATRIX_
+#define _MATRIX_
+
 #include <iostream>
 #include <random>
 #include <vector>
@@ -16,7 +19,7 @@
         if (width != other.width || height != other.height) { \
             throw std::invalid_argument("Matrix dimensions must match"); \
         } \
-        Matrix result(width, height); \
+        Matrix result(height, width); \
         IterateMatrix(result.mat[i][j] = mat[i][j] op other.mat[i][j];); \
         return result; \
     }
@@ -26,7 +29,7 @@ public:
     int width;
     int height;
     std::vector<std::vector<double>> mat;
-    Matrix(int wid = 0, int hei = 0, double std_dev = 1, double mean = 0.0) : width(wid), height(hei) {
+    Matrix(int hei = 0, int wid = 0, double std_dev = 1, double mean = 0.0) : height(hei), width(wid) {
         mat.resize(height, std::vector<double>(width, mean));
         if (std_dev) {
 
@@ -41,14 +44,20 @@ public:
     // General Operations
     // ------------------
     Matrix T() const {
-        Matrix transposed(height, width);
+        Matrix transposed(width, height);
         IterateMatrix(transposed.mat[j][i] = mat[i][j];);
         return transposed;
     }
 
     Matrix operator*(const double scalar) const {
-        Matrix result(width, height);
+        Matrix result(height, width);
         IterateMatrix(result.mat[i][j] = mat[i][j] * scalar;);
+        return result;
+    }
+
+    Matrix operator/(const double scalar) const {
+        Matrix result(height, width);
+        IterateMatrix(result.mat[i][j] = mat[i][j] / scalar;);
         return result;
     }
 
@@ -77,7 +86,7 @@ public:
         if (width != other.height) {
             throw std::invalid_argument("Incorrect dimensions");
         }
-        Matrix result(other.width, height, 0, 0);
+        Matrix result(height, other.width, 0, 0);
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < other.width; j++) {
                 for (int k = 0; k < width; k++) {
@@ -85,6 +94,22 @@ public:
                 }
             }
         }
+        return result;
+    }
+
+    const double sum(bool l1=false) const {
+        double result{};
+        if (l1) {
+            IterateMatrix(result += std::abs(mat[i][j]););
+            return result;
+        }
+        IterateMatrix(result += mat[i][j];);
+        return result;
+    }
+
+    Matrix matexp() const {
+        Matrix result(height, width);
+        IterateMatrix(result.mat[i][j] = std::exp(mat[i][j]););
         return result;
     }
 
@@ -99,22 +124,32 @@ public:
 
     // Machine Learning Functions
     // --------------------------
-    Matrix relu(double coeff = 0) const {
-        Matrix result(width, height);
+    const Matrix relu(double coeff = 0) const {
+        Matrix result(height, width);
         IterateMatrix(result.mat[i][j] = (0 < mat[i][j]) ? mat[i][j] : (coeff * mat[i][j]););
         return result;
     }
 
-    Matrix relu_derivative(double coeff = 0) const {
-        Matrix result(width, height);
+    const Matrix relu_derivative(double coeff = 0) const {
+        Matrix result(height, width);
         IterateMatrix(result.mat[i][j] = (0 <= mat[i][j]) ? 1.0 : coeff;);
         return result;
     }
 
-    const double l1_normalized() const {
-        double result{};
-        IterateMatrix(result += std::abs(mat[i][j]););
-        return std::sqrt(result);
+    const Matrix softmax() const {
+        Matrix result = matexp();
+        return result / result.sum();
+    }
+
+    const Matrix softmax_derivative() const {
+        Matrix jacobian(height, height);
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < height; j++) {
+                if (i == j) jacobian.mat[i][j] = mat[i][0] * (1 - mat[i][0]);
+                else jacobian.mat[i][j] = -mat[i][0] * mat[j][0];
+            }
+        }
+        return jacobian;
     }
 
     const double l2_normalized() const {
@@ -122,4 +157,8 @@ public:
         IterateMatrix(result += std::pow(mat[i][j], 2););
         return std::sqrt(result);
     }
+
+
 };
+
+#endif
