@@ -29,9 +29,9 @@ int main () {
     MLP nn;
 
     // Sequential layers of neural network
-    DenseLayer d0(0, 3, 10, 0.1);
+    DenseLayer d0(0, 3, 10, 8);
     ReLULayer r1(1, 0.2);
-    DenseLayer d2(2, 10, 1, 0.1);
+    DenseLayer d2(2, 10, 1, 8);
     ReLULayer r3(3, 0.2);
 
     nn.add_layer(d0);
@@ -41,6 +41,7 @@ int main () {
 
     // Converges to 0
     nn.train(train_X, train_Y, 4, 25);
+    nn.print_network();
 
     // No training necessary. All cases covered in training
     return 0;

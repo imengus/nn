@@ -13,9 +13,10 @@ public:
 
 class DenseLayer : public Layer {
 private:
-    double w_sdev, w_mean, b_sdev, b_mean;
+    double w_sdev, w_mean, b_sdev, b_mean, learn_rate, momentum;
     int layer_num;
-    double learn_rate;
+
+    Matrix prev_weight_delta, prev_bias_delta, weight_delta, bias_delta;
 
 public:
     Matrix input, output, weight, bias, grad;
@@ -24,7 +25,8 @@ public:
         int num,
         double inp_height,
         double out_height,
-        double lr = 0.1,
+        double mom = 0.5,
+        double lr = 0.0000001,
         double wsdev = 0.5,
         double wmean = 0,
         double bsdev = 0,
@@ -35,9 +37,15 @@ public:
         b_sdev(bsdev),
         b_mean(bmean),
         learn_rate(lr),
+        momentum(mom),
         layer_num(num) {
-        weight = Matrix(out_height, inp_height, w_sdev, w_mean);
+
+        weight = Matrix(out_height, inp_height, std::sqrt(2/inp_height), 0);
         bias = Matrix(out_height, 1, b_sdev, b_mean);
+
+        prev_weight_delta = Matrix(out_height, inp_height, 0, 0);
+        prev_bias_delta = Matrix(out_height, 1, 0, 0);
+
     }
 
     ~DenseLayer() {}
@@ -62,8 +70,14 @@ public:
         Matrix grad_bias = prev_grad * -1;
         grad = (prev_grad.T().mult(weight)).T();
 
-        weight = weight - grad_weight * learn_rate;
-        bias = bias - grad_bias * learn_rate;
+        weight_delta = grad_weight * learn_rate;
+        bias_delta = grad_bias * learn_rate;
+
+        weight = weight - weight_delta - prev_weight_delta * momentum;
+        bias = bias - bias_delta - prev_bias_delta * momentum;
+
+        prev_weight_delta = weight_delta;
+        prev_bias_delta = bias_delta;
 
         return grad;
     }
@@ -127,8 +141,6 @@ public:
 };
 
 class MLP {
-    Matrix gradient;
-    double coeff = 1/784;
 public:
     std::vector<Layer*> layers;
 
@@ -137,13 +149,13 @@ public:
         return (Y_hat - Y).l2_normalized();
     }
 
-    void add_layer(Layer &layer) {
-        layers.push_back(&layer);
-    }
+    void add_layer(Layer &layer) {layers.push_back(&layer);}
 
     void print_network() {for (auto layer : layers) layer->print_parameters();}
 
     void train(Matrix train_X, Matrix train_Y, int mb_size, int n_epoch) {
+        std::cout << "Starting training" << std::endl;
+
         std::ofstream MSEHist("mse_history.csv");
 
         int len = train_X.height;
@@ -173,7 +185,7 @@ public:
                     total_mse += calculate_error(X, Y, batch_grad) * 0.01;
 
                     }
-                gradient = batch_grad / mb_size;
+                gradient = batch_grad / len;
                 batch_grad = init_grad;
 
                 for (int l = layers.size() - 1; l >= 0; l--) {
@@ -182,10 +194,39 @@ public:
             }
             if (std::isnan(-total_mse)) throw std::invalid_argument("Must adjust parameters as MSE is NaN");
             MSEHist << total_mse << std::endl;
-            std::cout << i << ": " << total_mse << std::endl;
+            std::cout << i + 1 << ": " << total_mse << std::endl;
             total_mse = 0;
         }
         MSEHist.close();
+        std::cout << std::endl;
     }
+
+    Matrix predict(Matrix X) {
+        for (auto layer : layers) X = (*layer).forward(X);
+        return X;
+    }
+
+    template <typename F>
+    void test(Matrix test_X, Matrix test_Y, F&&func) {
+        std::cout << "Starting testing" << std::endl << std::endl;
+        
+        Matrix X, Y;
+        int total_correct = 0;
+        int total_cases = test_Y.height;
+        for (int i = 0; i < total_cases; i++) {
+            X = {test_X.mat[i]};
+            Y = {test_Y.mat[i]};
+
+            X = X.T();
+            Y = Y.T();
+            X = predict(X);
+            
+            total_correct = func(X, Y, total_correct);
+        }
+        std::cout << "Results: " << std::endl;
+        std::cout << total_correct << "/" << total_cases << std::endl;
+        float result = total_correct / total_cases;
+    }
+
 };
 #endif

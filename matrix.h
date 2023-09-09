@@ -66,6 +66,13 @@ public:
     Overload(*);
     Overload(/);
 
+    bool operator == (const Matrix &other) const {
+        if (width != other.width || height != other.height) {
+            return false;}
+        IterateMatrix(if (mat[i][j] != other.mat[i][j]) return false;);
+        return true;
+    }
+
     Matrix &operator=(const Matrix &result) {
         width = result.width;
         height = result.height;
@@ -104,6 +111,18 @@ public:
             return result;
         }
         IterateMatrix(result += mat[i][j];);
+        return result;
+    }
+
+    const double max(bool arg=false) const {
+        double result = 0;
+        IterateMatrix( if (result < mat[i][j]) result = mat[i][j];);
+        return result;
+    }
+
+    const double min(bool give_arg=false) const {
+        double result = 0;
+        IterateMatrix( if (result > mat[i][j]) result = mat[i][j];);
         return result;
     }
 
