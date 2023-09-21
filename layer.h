@@ -25,8 +25,9 @@ public:
         int num,
         double inp_height,
         double out_height,
-        double mom = 0.5,
-        double lr = 0.0000001,
+        bool he = true,
+        double mom = 0.2,
+        double lr = 0.9,
         double wsdev = 0.5,
         double wmean = 0,
         double bsdev = 0,
@@ -39,12 +40,16 @@ public:
         learn_rate(lr),
         momentum(mom),
         layer_num(num) {
-
-        weight = Matrix(out_height, inp_height, std::sqrt(2/inp_height), 0);
+        
+        if (he) {
+            w_sdev = std::sqrt(2/inp_height);
+            w_mean = 0;
+        }
+        weight = Matrix(out_height, inp_height, w_sdev, w_mean);
         bias = Matrix(out_height, 1, b_sdev, b_mean);
 
-        prev_weight_delta = Matrix(out_height, inp_height, 0, 0);
-        prev_bias_delta = Matrix(out_height, 1, 0, 0);
+        prev_weight_delta = Matrix(out_height, inp_height);
+        prev_bias_delta = Matrix(out_height, 1);
 
     }
 
@@ -61,14 +66,14 @@ public:
 
     Matrix forward(Matrix inp) override {
         input = inp;
-        output = weight.mult(input) - bias;
+        output = (weight | input)- bias;
         return output;
     }
 
     Matrix backward(Matrix prev_grad) override {
-        Matrix grad_weight = prev_grad.mult(input.T());
+        Matrix grad_weight = prev_grad | input.T();
         Matrix grad_bias = prev_grad * -1;
-        grad = (prev_grad.T().mult(weight)).T();
+        grad = weight.T() | prev_grad;
 
         weight_delta = grad_weight * learn_rate;
         bias_delta = grad_bias * learn_rate;
@@ -135,7 +140,7 @@ public:
     }
 
     Matrix backward(Matrix prev_grad) override {
-        grad = output.softmax_derivative().mult(prev_grad);
+        grad = output.softmax_derivative() | prev_grad;
         return grad;
     }
 };
@@ -144,14 +149,14 @@ class MLP {
 public:
     std::vector<Layer*> layers;
 
+    void add_layer(Layer &layer) {layers.push_back(&layer);}
+
+    void print_network() {for (auto layer : layers) layer->print_parameters();}
+
     double calculate_error(Matrix Y_hat, Matrix Y, Matrix &gradient) {
         gradient =  gradient + (Y_hat - Y) * 2;
         return (Y_hat - Y).l2_normalized();
     }
-
-    void add_layer(Layer &layer) {layers.push_back(&layer);}
-
-    void print_network() {for (auto layer : layers) layer->print_parameters();}
 
     void train(Matrix train_X, Matrix train_Y, int mb_size, int n_epoch) {
         std::cout << "Starting training" << std::endl;
@@ -163,36 +168,32 @@ public:
         int n_batches = len / mb_size;
         int s = train_Y.mat[0].size();
 
-        Matrix X;
-        Matrix Y;
-        Matrix gradient(s, 1, 0, 0);
-        Matrix batch_grad(s, 1, 0, 0);
-        Matrix init_grad(s, 1, 0, 0);
-        double total_mse{};
-        double mse{};
+        Matrix X, Y;
+        Matrix gradient(s, 1);
+        Matrix batch_grad(s, 1);
+        Matrix init_grad(s, 1);
+        double total_mse{}, mse{};
         for (int i = 0; i < n_epoch; i++) {
             for (int j = 0; j < n_batches; j++) {
                 for (int k = j * mb_size; k < (j + 1) * mb_size; k++) {
 
                     X = {train_X.mat[j]};
                     Y = {train_Y.mat[j]};
-
                     X = X.T();
                     Y = Y.T();
 
                     for (auto layer : layers) X = (*layer).forward(X);
                     
-                    total_mse += calculate_error(X, Y, batch_grad) * 0.01;
-
+                    total_mse += calculate_error(X, Y, batch_grad);
                     }
-                gradient = batch_grad / len;
+                gradient = batch_grad;
                 batch_grad = init_grad;
 
                 for (int l = layers.size() - 1; l >= 0; l--) {
                     gradient = (*layers[l]).backward(gradient);
                 }
             }
-            if (std::isnan(-total_mse)) throw std::invalid_argument("Must adjust parameters as MSE is NaN");
+            if (std::isnan(-total_mse)) throw std::invalid_argument("Must adjust parameters as MSE is -NaN");
             MSEHist << total_mse << std::endl;
             std::cout << i + 1 << ": " << total_mse << std::endl;
             total_mse = 0;
@@ -207,7 +208,7 @@ public:
     }
 
     template <typename F>
-    void test(Matrix test_X, Matrix test_Y, F&&func) {
+    float test(Matrix test_X, Matrix test_Y, F&&inc_func) {
         std::cout << "Starting testing" << std::endl << std::endl;
         
         Matrix X, Y;
@@ -221,11 +222,11 @@ public:
             Y = Y.T();
             X = predict(X);
             
-            total_correct = func(X, Y, total_correct);
+            total_correct = inc_func(X, Y, total_correct);
         }
         std::cout << "Results: " << std::endl;
         std::cout << total_correct << "/" << total_cases << std::endl;
-        float result = total_correct / total_cases;
+        return total_correct / total_cases;
     }
 
 };

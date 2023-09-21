@@ -29,7 +29,7 @@ public:
     int width;
     int height;
     std::vector<std::vector<double>> mat;
-    Matrix(int hei = 0, int wid = 0, double std_dev = 1, double mean = 0.0) : height(hei), width(wid) {
+    Matrix(int hei = 0, int wid = 0, double std_dev = 0, double mean = 0.0) : height(hei), width(wid) {
         mat.resize(height, std::vector<double>(width, mean));
         if (std_dev) {
 
@@ -47,6 +47,21 @@ public:
         Matrix transposed(width, height);
         IterateMatrix(transposed.mat[j][i] = mat[i][j];);
         return transposed;
+    }
+
+    Matrix operator |(const Matrix& other) const {
+        if (width != other.height) {
+            throw std::invalid_argument("Incorrect dimensions");
+        }
+        Matrix result(height, other.width, 0, 0);
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < other.width; j++) {
+                for (int k = 0; k < width; k++) {
+                    result.mat[i][j] += mat[i][k] * other.mat[k][j];
+                }
+            }
+        }
+        return result;
     }
 
     Matrix operator*(const double scalar) const {
@@ -85,23 +100,7 @@ public:
         width = result[0].size();
         height = result.size();
         mat = result;
-
         return *this;
-    }
-
-    Matrix mult(const Matrix& other) const {
-        if (width != other.height) {
-            throw std::invalid_argument("Incorrect dimensions");
-        }
-        Matrix result(height, other.width, 0, 0);
-        for (int i = 0; i < height; i++) {
-            for (int j = 0; j < other.width; j++) {
-                for (int k = 0; k < width; k++) {
-                    result.mat[i][j] += mat[i][k] * other.mat[k][j];
-                }
-            }
-        }
-        return result;
     }
 
     const double sum(bool l1=false) const {
@@ -165,7 +164,7 @@ public:
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < height; j++) {
                 if (i == j) jacobian.mat[i][j] = mat[i][0] * (1 - mat[i][0]);
-                else jacobian.mat[i][j] = -mat[i][0] * mat[j][0];
+                else jacobian.mat[i][j] = 0; //-mat[i][0] * mat[j][0];
             }
         }
         return jacobian;
