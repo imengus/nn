@@ -1,0 +1,85 @@
+% Modified from Mark Wilbrow's code on https://tex.stackexchange.com/a/153974
+
+\documentclass[border=0.125cm]{standalone}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\begin{document}
+
+\tikzset{%
+  every neuron/.style={
+    circle,
+    draw,
+    minimum size=0.1cm
+  },
+  neuron missing/.style={
+    draw=none, 
+    scale=2,
+    text height=0.3333cm,
+    execute at begin node=\color{black}$\vdots$
+  },
+}
+
+\begin{tikzpicture}[x=1.5cm, y=1.5cm, >=stealth]
+
+\node (one) at (-0.6,0)
+    {\includegraphics[width=.1\textwidth]{mnist8.png}};
+
+\foreach \m/\l [count=\y] in {1,2,3,4,5,6,7, missing,8}
+  \node [every neuron/.try, neuron \m/.try] (input-\m) at (0,2.4-\y*0.5) {};
+
+\foreach \m [count=\y] in {1,2,3,4,5,6, missing,7}
+  \node [every neuron/.try, neuron \m/.try ] (hidden1-\m) at (1.8,2.1-\y*0.5) {};
+
+\foreach \m [count=\y] in {1,2, 3,4,5,6, missing, 7}
+  \node [every neuron/.try, neuron \m/.try ] (prelu1-\m) at (2.5,2.1-\y*0.5) {};
+
+\foreach \m [count=\y] in {1,2,3,4,5,6,7,8,9,10}
+  \node [every neuron/.try, neuron \m/.try ] (hidden2-\m) at (3.6,1.7-\y*0.3) {};
+  
+\foreach \m [count=\y] in {1,2,3,4,5,6,7,8,9,10}
+  \node [every neuron/.try, neuron \m/.try ] (output-\m) at (4.3,1.45-\y*0.25) {};
+
+\node[every neuron, fill=lightgray] at (4.3,1.45-9*0.25) {};
+
+\foreach \l [count=\i] in {1,2,3,4,5,6,7,784}
+  \node at (input-\i) {\tiny{\l}};
+
+\foreach \l [count=\i] in {1,2,3,4,5,6,100}
+  \node at (hidden1-\i) {\tiny{\l}};
+
+\foreach \l [count=\i] in {1,2,3,4,5,6,100}
+  \node at (prelu1-\i) {\tiny{\l}};
+
+\foreach \l [count=\i] in {1,2,3,4,5,6,7,8,9,10}
+  \node at (hidden2-\i) {\tiny{\l}};
+
+\foreach \l [count=\i] in {0,1,2,3,4,5,6,7,8,9}
+  \node at (output-\i) {\tiny{\l}};
+
+
+\foreach \i in {1,...,8}
+  \foreach \j in {1,...,7}
+    \draw [->] (input-\i) -- (hidden1-\j);
+
+\foreach \i in {1,...,7}
+  \draw [->] (hidden1-\i) -- (prelu1-\i);
+    
+\foreach \i in {1,...,7}
+  \foreach \j in {1,...,10}
+    \draw [->] (prelu1-\i) -- (hidden2-\j);
+    
+\foreach \i in {1,...,10}
+    \draw [->] (hidden2-\i) -- (output-\i);
+
+\foreach \l [count=\x from 0] in {Input, $1^{st}$ hidden, $2^{nd}$ hidden}
+  \node [align=center, above] at (\x*1.8,2) {\l};
+
+\foreach \l [count=\x from 0] in {PReLU, Softmax}
+  \node [align=center, above] at (\x*1.8+2.3,1.7) {\tiny{(\l)}};
+
+\node [rotate=-90] at (4.6,0) {Output = 8};
+
+\end{tikzpicture}
+
+\end{document}
